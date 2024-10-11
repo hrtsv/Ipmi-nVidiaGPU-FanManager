@@ -1,12 +1,15 @@
+version: '3.8'
+
 services:
   temp-monitor:
-    image: ubuntu:20.04
+    image: ubuntu:22.04
     container_name: temp-monitor-fan-control
     privileged: true
     network_mode: host
     volumes:
       - ./app:/app
       - /sys:/sys:ro
+      - ./docker.run:/docker.run
     working_dir: /app
     environment:
       - PYTHONUNBUFFERED=1
@@ -16,24 +19,7 @@ services:
       - IPMI_USERNAME=ipmi_user
       - IPMI_PASSWORD=ipmi_password
       - DEBIAN_FRONTEND=noninteractive
-    command: >
-      bash -c "
-      apt-get update && 
-      apt-get install -y software-properties-common curl python3 python3-pip ipmitool openssl &&
-      add-apt-repository ppa:graphics-drivers/ppa &&
-      curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | apt-key add - &&
-      curl -s -L https://nvidia.github.io/nvidia-docker/ubuntu20.04/nvidia-docker.list | tee /etc/apt/sources.list.d/nvidia-docker.list &&
-      apt-get update &&
-      apt-get install -y nvidia-container-toolkit-base &&
-      pip3 install flask flask-restx pyjwt nvidia-ml-py3 &&
-      if [ ! -f cert.pem ] || [ ! -f key.pem ]; then
-        openssl req -x509 -newkey rsa:4096 -nodes -out cert.pem -keyout key.pem -days 365 -subj '/CN=localhost'
-      fi &&
-      curl -L https://raw.githubusercontent.com/hrtsv/Ipmi-nVidiaGPU-FanManager/main/app/app.py -o app.py &&
-      curl -L https://raw.githubusercontent.com/hrtsv/Ipmi-nVidiaGPU-FanManager/main/app/index.html -o index.html &&
-      sed -i 's/app.run(host=.*/app.run(host=\"0.0.0.0\", port=8443, ssl_context=(\"cert.pem\", \"key.pem\"))/' app.py &&
-      python3 app.py
-      "
+    entrypoint: ["/bin/bash", "/docker.run"]
     ports:
       - "8443:8443"
     deploy:
@@ -44,3 +30,16 @@ services:
               count: all
               capabilities: [gpu]
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-k", "https://localhost:8443/health"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "com.docker.compose.project=temp-monitor-fan-control"
+
+networks:
+  default:
+    name: temp-monitor-network
+    external: true

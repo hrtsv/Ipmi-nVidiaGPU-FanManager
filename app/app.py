@@ -2,8 +2,9 @@ import os
 import time
 import subprocess
 import re
+import logging
 from flask import Flask, request, send_from_directory, jsonify
-from flask_restx import Api, Resource, fields
+from flask_restx import Api, Resource, fields, reqparse
 from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
 from functools import wraps
@@ -11,6 +12,11 @@ import json
 import sqlite3
 from datetime import datetime, timedelta
 import pynvml
+from tenacity import retry, stop_after_attempt, wait_fixed
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__, static_url_path='', static_folder='.')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', os.urandom(24))
@@ -50,14 +56,15 @@ def init_db():
             conn.execute('''CREATE TABLE IF NOT EXISTS temperature_logs
                             (timestamp INTEGER, cpu_temp REAL, ram_temp REAL, gpu0_temp REAL, gpu1_temp REAL, case_temp REAL)''')
     except sqlite3.Error as e:
-        print(f"Database initialization error: {e}")
+        logger.error(f"Database initialization error: {e}")
 
 # Temperature monitoring
 try:
     pynvml.nvmlInit()
 except pynvml.NVMLError as e:
-    print(f"NVML initialization error: {e}")
+    logger.error(f"NVML initialization error: {e}")
 
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 def get_gpu_temps():
     temps = {}
     try:
@@ -67,9 +74,10 @@ def get_gpu_temps():
             temp = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
             temps[f'GPU{i}'] = temp
     except pynvml.NVMLError as error:
-        print(f"Error getting GPU temperatures: {error}")
+        logger.error(f"Error getting GPU temperatures: {error}")
     return temps
 
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 def get_ipmi_temps():
     try:
         cmd = ['ipmitool', '-H', config['ipmi']['address'], '-U', config['ipmi']['username'], '-P', config['ipmi']['password'], 'sdr', 'type', 'temperature']
@@ -81,24 +89,25 @@ def get_ipmi_temps():
             elif 'Ambient' in line or 'System Temp' in line: temps['CASE'] = int(re.search(r'(\d+) degrees C', line).group(1))
         return temps
     except subprocess.CalledProcessError as e:
-        print(f"Error executing IPMI command: {e}")
+        logger.error(f"Error executing IPMI command: {e}")
     except subprocess.TimeoutExpired:
-        print("IPMI command timed out")
+        logger.error("IPMI command timed out")
     except Exception as e:
-        print(f"Unexpected error in get_ipmi_temps: {e}")
+        logger.error(f"Unexpected error in get_ipmi_temps: {e}")
     return None
 
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 def set_fan_speed(speed):
     try:
         cmd = ['ipmitool', '-H', config['ipmi']['address'], '-U', config['ipmi']['username'], '-P', config['ipmi']['password'], 'raw', '0x30', '0x30', '0x02', hex(speed)]
         subprocess.run(cmd, check=True, timeout=10)
-        print(f"Fan speed set to {speed}%")
+        logger.info(f"Fan speed set to {speed}%")
     except subprocess.CalledProcessError as e:
-        print(f"Error setting fan speed: {e}")
+        logger.error(f"Error setting fan speed: {e}")
     except subprocess.TimeoutExpired:
-        print("Fan speed command timed out")
+        logger.error("Fan speed command timed out")
     except Exception as e:
-        print(f"Unexpected error in set_fan_speed: {e}")
+        logger.error(f"Unexpected error in set_fan_speed: {e}")
 
 def calculate_fan_speed(current_temp, low_threshold, high_threshold):
     if current_temp <= low_threshold: return FAN_MIN
@@ -164,15 +173,20 @@ class Temperatures(Resource):
                              (int(time.time()), ipmi_temps.get('CPU'), ipmi_temps.get('RAM'),
                               gpu_temps.get('GPU0'), gpu_temps.get('GPU1'), ipmi_temps.get('CASE')))
         except sqlite3.Error as e:
-            print(f"Database error: {e}")
+            logger.error(f"Database error: {e}")
         
         return {'temperatures': all_temps, 'fan_speed': max_fan_speed}
+
+parser = reqparse.RequestParser()
+parser.add_argument('hours', type=int, required=True, help='Number of hours for historical data')
 
 @api.route('/historical_data')
 class HistoricalData(Resource):
     @token_required
+    @api.expect(parser)
     def get(self):
-        hours = request.args.get('hours', default=24, type=int)
+        args = parser.parse_args()
+        hours = args['hours']
         start_time = int(time.time()) - hours * 3600
         try:
             with sqlite3.connect(DB_FILE) as conn:
@@ -181,12 +195,40 @@ class HistoricalData(Resource):
                 data = c.fetchall()
             return {'data': data}
         except sqlite3.Error as e:
-            print(f"Database error: {e}")
+            logger.error(f"Database error: {e}")
             return {'message': 'Error retrieving historical data'}, 500
 
 @app.route('/')
 def index():
     return send_from_directory('.', 'index.html')
+
+@app.route('/health')
+def health_check():
+    try:
+        # Check if we can connect to the database
+        with sqlite3.connect(DB_FILE) as conn:
+            conn.execute("SELECT 1")
+        
+        # Check if we can get GPU temperatures
+        get_gpu_temps()
+        
+        # Check if we can get IPMI temperatures
+        get_ipmi_temps()
+        
+        return jsonify(status="healthy"), 200
+    except Exception as e:
+        logger.error(f"Health check failed: {str(e)}")
+        return jsonify(status="unhealthy", error=str(e)), 500
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    # Pass through HTTP errors
+    if isinstance(e, HTTPException):
+        return e
+
+    # Now you're handling non-HTTP exceptions only
+    logger.error(f"An unexpected error occurred: {str(e)}")
+    return jsonify(error=str(e)), 500
 
 if __name__ == '__main__':
     init_db()

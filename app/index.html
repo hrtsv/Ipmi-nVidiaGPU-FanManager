@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Temperature Monitor</title>
+    <title>Temperature Monitor and Fan Control</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f0f0f0; }
@@ -15,15 +15,17 @@
         button { background-color: #4CAF50; color: white; border: none; cursor: pointer; }
         button:hover { background-color: #45a049; }
         #status { margin-bottom: 20px; font-weight: bold; }
+        #error { color: red; margin-top: 10px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Temperature Monitor</h1>
+        <h1>Temperature Monitor and Fan Control</h1>
         <div id="loginForm">
             <input type="text" id="username" placeholder="Username">
             <input type="password" id="password" placeholder="Password">
             <button onclick="login()">Login</button>
+            <div id="error"></div>
         </div>
         <div id="dashboard" style="display:none;">
             <div id="status"></div>
@@ -58,13 +60,17 @@
                 token = data.token;
                 document.getElementById('loginForm').style.display = 'none';
                 document.getElementById('dashboard').style.display = 'block';
+                document.getElementById('error').textContent = '';
                 initChart();
                 updateTemperatures();
                 setInterval(updateTemperatures, 60000);
                 updateHistoricalData();
             } else {
-                alert('Login failed');
+                document.getElementById('error').textContent = 'Login failed: ' + (data.message || 'Unknown error');
             }
+        })
+        .catch(error => {
+            document.getElementById('error').textContent = 'Login error: ' + error.message;
         });
     }
 
@@ -104,14 +110,19 @@
         fetch('/temperatures', {
             headers: { 'Authorization': token }
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
         .then(data => {
             document.getElementById('status').innerHTML = Object.entries(data.temperatures)
-                .map(([key, value]) => `${key}: ${value}°C`).join('<br>') + 
+                .map(([key, value]) => `${key}: ${value !== null ? value + '°C' : 'N/A'}`).join('<br>') + 
                 `<br>Fan Speed: ${data.fan_speed}%`;
             
             const now = new Date();
-            chart.data.labels.push(now);
+            chart.data.labels.push(now.toLocaleTimeString());
             chart.data.datasets[0].data.push(data.temperatures.CPU);
             chart.data.datasets[1].data.push(data.temperatures.RAM);
             chart.data.datasets[2].data.push(data.temperatures.GPU0);
@@ -126,4 +137,35 @@
         })
         .catch(error => {
             console.error('Error fetching temperatures:', error);
-            if (error.message.
+            document.getElementById('status').innerHTML = 'Error fetching temperatures: ' + error.message;
+        });
+    }
+
+    function updateHistoricalData() {
+        const hours = document.getElementById('timeRange').value;
+        fetch(`/historical_data?hours=${hours}`, {
+            headers: { 'Authorization': token }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            chart.data.labels = data.data.map(entry => new Date(entry[0] * 1000).toLocaleString());
+            chart.data.datasets[0].data = data.data.map(entry => entry[1]);
+            chart.data.datasets[1].data = data.data.map(entry => entry[2]);
+            chart.data.datasets[2].data = data.data.map(entry => entry[3]);
+            chart.data.datasets[3].data = data.data.map(entry => entry[4]);
+            chart.data.datasets[4].data = data.data.map(entry => entry[5]);
+            chart.update();
+        })
+        .catch(error => {
+            console.error('Error fetching historical data:', error);
+            document.getElementById('status').innerHTML = 'Error fetching historical data: ' + error.message;
+        });
+    }
+    </script>
+</body>
+</html>
