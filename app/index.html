@@ -3,169 +3,154 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Temperature Monitor and Fan Control</title>
+    <title>Temperature Monitor</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f0f0f0; }
-        .container { max-width: 800px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        .chart-container { position: relative; height: 300px; width: 100%; margin-bottom: 20px; }
-        h1 { color: #333; }
-        #loginForm, #dashboard { margin-top: 20px; }
-        input, select, button { margin: 10px 0; padding: 8px; width: 100%; }
-        button { background-color: #4CAF50; color: white; border: none; cursor: pointer; }
-        button:hover { background-color: #45a049; }
-        #status { margin-bottom: 20px; font-weight: bold; }
-        #error { color: red; margin-top: 10px; }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+        }
+        #login-form, #temperature-display {
+            margin-top: 20px;
+        }
+        input, button {
+            margin: 10px 0;
+            padding: 5px;
+        }
+        #error-message {
+            color: red;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Temperature Monitor and Fan Control</h1>
-        <div id="loginForm">
+        <h1>Temperature Monitor</h1>
+        <div id="login-form">
             <input type="text" id="username" placeholder="Username">
             <input type="password" id="password" placeholder="Password">
             <button onclick="login()">Login</button>
-            <div id="error"></div>
         </div>
-        <div id="dashboard" style="display:none;">
-            <div id="status"></div>
-            <div class="chart-container">
-                <canvas id="tempChart"></canvas>
-            </div>
-            <select id="timeRange" onchange="updateHistoricalData()">
-                <option value="6">Last 6 hours</option>
-                <option value="12">Last 12 hours</option>
-                <option value="24" selected>Last 24 hours</option>
-                <option value="48">Last 48 hours</option>
-            </select>
-            <button onclick="logout()">Logout</button>
+        <div id="error-message"></div>
+        <div id="temperature-display" style="display: none;">
+            <h2>Current Temperatures</h2>
+            <div id="current-temps"></div>
+            <h2>Fan Speed</h2>
+            <div id="fan-speed"></div>
+            <h2>Temperature History</h2>
+            <canvas id="temp-chart"></canvas>
         </div>
     </div>
-
     <script>
-    let token;
-    let chart;
+        let token = '';
+        let chart;
 
-    function login() {
-        const username = document.getElementById('username').value;
-        const password = document.getElementById('password').value;
-        fetch('/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.token) {
-                token = data.token;
-                document.getElementById('loginForm').style.display = 'none';
-                document.getElementById('dashboard').style.display = 'block';
-                document.getElementById('error').textContent = '';
-                initChart();
-                updateTemperatures();
-                setInterval(updateTemperatures, 60000);
-                updateHistoricalData();
-            } else {
-                document.getElementById('error').textContent = 'Login failed: ' + (data.message || 'Unknown error');
-            }
-        })
-        .catch(error => {
-            document.getElementById('error').textContent = 'Login error: ' + error.message;
-        });
-    }
-
-    function logout() {
-        token = null;
-        document.getElementById('loginForm').style.display = 'block';
-        document.getElementById('dashboard').style.display = 'none';
-        if (chart) {
-            chart.destroy();
-            chart = null;
+        function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            fetch('/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ username, password }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.token) {
+                    token = data.token;
+                    document.getElementById('login-form').style.display = 'none';
+                    document.getElementById('temperature-display').style.display = 'block';
+                    document.getElementById('error-message').textContent = '';
+                    updateTemperatures();
+                    setInterval(updateTemperatures, 5000);
+                    updateHistoricalData();
+                } else {
+                    document.getElementById('error-message').textContent = 'Login failed. Please try again.';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('error-message').textContent = 'An error occurred. Please try again.';
+            });
         }
-    }
 
-    function initChart() {
-        const ctx = document.getElementById('tempChart').getContext('2d');
-        chart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: [],
-                datasets: [
-                    { label: 'CPU', data: [], borderColor: 'red', fill: false },
-                    { label: 'RAM', data: [], borderColor: 'blue', fill: false },
-                    { label: 'GPU0', data: [], borderColor: 'green', fill: false },
-                    { label: 'GPU1', data: [], borderColor: 'purple', fill: false },
-                    { label: 'CASE', data: [], borderColor: 'orange', fill: false }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: { y: { beginAtZero: true, max: 100 } }
-            }
-        });
-    }
+        function updateTemperatures() {
+            fetch('/temperatures', {
+                headers: {
+                    'Authorization': token,
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                const tempDiv = document.getElementById('current-temps');
+                tempDiv.innerHTML = '';
+                for (const [component, temp] of Object.entries(data.temperatures)) {
+                    tempDiv.innerHTML += `<p>${component}: ${temp}°C</p>`;
+                }
+                document.getElementById('fan-speed').textContent = `${data.fan_speed}%`;
+            })
+            .catch(error => console.error('Error:', error));
+        }
 
-    function updateTemperatures() {
-        fetch('/temperatures', {
-            headers: { 'Authorization': token }
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            return response.json();
-        })
-        .then(data => {
-            document.getElementById('status').innerHTML = Object.entries(data.temperatures)
-                .map(([key, value]) => `${key}: ${value !== null ? value + '°C' : 'N/A'}`).join('<br>') + 
-                `<br>Fan Speed: ${data.fan_speed}%`;
-            
-            const now = new Date();
-            chart.data.labels.push(now.toLocaleTimeString());
-            chart.data.datasets[0].data.push(data.temperatures.CPU);
-            chart.data.datasets[1].data.push(data.temperatures.RAM);
-            chart.data.datasets[2].data.push(data.temperatures.GPU0);
-            chart.data.datasets[3].data.push(data.temperatures.GPU1);
-            chart.data.datasets[4].data.push(data.temperatures.CASE);
+        function updateHistoricalData() {
+            fetch('/historical_data?hours=24', {
+                headers: {
+                    'Authorization': token,
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                const labels = data.data.map(entry => new Date(entry[0] * 1000).toLocaleTimeString());
+                const datasets = [
+                    { label: 'CPU', data: data.data.map(entry => entry[1]), borderColor: 'red', fill: false },
+                    { label: 'RAM', data: data.data.map(entry => entry[2]), borderColor: 'blue', fill: false },
+                    { label: 'GPU0', data: data.data.map(entry => entry[3]), borderColor: 'green', fill: false },
+                    { label: 'GPU1', data: data.data.map(entry => entry[4]), borderColor: 'purple', fill: false },
+                    { label: 'Case', data: data.data.map(entry => entry[5]), borderColor: 'orange', fill: false },
+                ];
 
-            if (chart.data.labels.length > 60) {
-                chart.data.labels.shift();
-                chart.data.datasets.forEach(dataset => dataset.data.shift());
-            }
-            chart.update();
-        })
-        .catch(error => {
-            console.error('Error fetching temperatures:', error);
-            document.getElementById('status').innerHTML = 'Error fetching temperatures: ' + error.message;
-        });
-    }
+                if (chart) {
+                    chart.destroy();
+                }
 
-    function updateHistoricalData() {
-        const hours = document.getElementById('timeRange').value;
-        fetch(`/historical_data?hours=${hours}`, {
-            headers: { 'Authorization': token }
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            return response.json();
-        })
-        .then(data => {
-            chart.data.labels = data.data.map(entry => new Date(entry[0] * 1000).toLocaleString());
-            chart.data.datasets[0].data = data.data.map(entry => entry[1]);
-            chart.data.datasets[1].data = data.data.map(entry => entry[2]);
-            chart.data.datasets[2].data = data.data.map(entry => entry[3]);
-            chart.data.datasets[3].data = data.data.map(entry => entry[4]);
-            chart.data.datasets[4].data = data.data.map(entry => entry[5]);
-            chart.update();
-        })
-        .catch(error => {
-            console.error('Error fetching historical data:', error);
-            document.getElementById('status').innerHTML = 'Error fetching historical data: ' + error.message;
-        });
-    }
+                chart = new Chart(document.getElementById('temp-chart'), {
+                    type: 'line',
+                    data: { labels, datasets },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Temperature (°C)'
+                                }
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Time'
+                                }
+                            }
+                        }
+                    }
+                });
+            })
+            .catch(error => console.error('Error:', error));
+        }
     </script>
 </body>
 </html>

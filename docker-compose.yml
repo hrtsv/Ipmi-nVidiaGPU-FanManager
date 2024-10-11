@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "8443:8443"
+    volumes:
+      - temperature_logs:/app/temperature_logs
+    env_file:
+      - .env
+    devices:
+      - /dev/nvidia0:/dev/nvidia0
+      - /dev/nvidiactl:/dev/nvidiactl
+      - /dev/nvidia-modeset:/dev/nvidia-modeset
+      - /dev/nvidia-uvm:/dev/nvidia-uvm
+    restart: unless-stopped
+
+volumes:
+  temperature_logs:

@@ -8,11 +8,12 @@ from flask_restx import Api, Resource, fields, reqparse
 from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
 from functools import wraps
-import json
 import sqlite3
 from datetime import datetime, timedelta
 import pynvml
 from tenacity import retry, stop_after_attempt, wait_fixed
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -22,8 +23,14 @@ app = Flask(__name__, static_url_path='', static_folder='.')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', os.urandom(24))
 api = Api(app, version='1.0', title='Temperature Monitor API', description='A simple Temperature Monitor API', doc='/api')
 
+# Initialize rate limiter
+limiter = Limiter(
+    app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"]
+)
+
 # Constants and Configuration
-CONFIG_FILE = 'config.json'
 DB_FILE = 'temperature_logs.db'
 TEMP_THRESHOLDS = {
     'CPU': {'low': 50, 'high': 70},
@@ -34,20 +41,15 @@ TEMP_THRESHOLDS = {
 }
 FAN_MIN, FAN_MAX = 10, 100
 
-def load_config():
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, 'r') as f:
-            return json.load(f)
-    return {
-        'users': {os.environ.get('DEFAULT_USERNAME', 'admin'): generate_password_hash(os.environ.get('DEFAULT_PASSWORD', 'admin'))},
-        'ipmi': {
-            'address': os.environ.get('IPMI_ADDRESS', 'localhost'),
-            'username': os.environ.get('IPMI_USERNAME', 'ipmi_user'),
-            'password': os.environ.get('IPMI_PASSWORD', 'ipmi_password')
-        }
-    }
+# Load configuration from environment variables
+DEFAULT_USERNAME = os.environ.get('DEFAULT_USERNAME', 'admin')
+DEFAULT_PASSWORD = os.environ.get('DEFAULT_PASSWORD', 'admin')
+IPMI_ADDRESS = os.environ.get('IPMI_ADDRESS', 'localhost')
+IPMI_USERNAME = os.environ.get('IPMI_USERNAME', 'ipmi_user')
+IPMI_PASSWORD = os.environ.get('IPMI_PASSWORD', 'ipmi_password')
 
-config = load_config()
+# User configuration
+USERS = {DEFAULT_USERNAME: generate_password_hash(DEFAULT_PASSWORD)}
 
 # Database initialization
 def init_db():
@@ -80,7 +82,7 @@ def get_gpu_temps():
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 def get_ipmi_temps():
     try:
-        cmd = ['ipmitool', '-H', config['ipmi']['address'], '-U', config['ipmi']['username'], '-P', config['ipmi']['password'], 'sdr', 'type', 'temperature']
+        cmd = ['ipmitool', '-H', IPMI_ADDRESS, '-U', IPMI_USERNAME, '-P', IPMI_PASSWORD, 'sdr', 'type', 'temperature']
         output = subprocess.check_output(cmd, universal_newlines=True, timeout=10)
         temps = {'CPU': None, 'RAM': None, 'CASE': None}
         for line in output.splitlines():
@@ -99,7 +101,7 @@ def get_ipmi_temps():
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 def set_fan_speed(speed):
     try:
-        cmd = ['ipmitool', '-H', config['ipmi']['address'], '-U', config['ipmi']['username'], '-P', config['ipmi']['password'], 'raw', '0x30', '0x30', '0x02', hex(speed)]
+        cmd = ['ipmitool', '-H', IPMI_ADDRESS, '-U', IPMI_USERNAME, '-P', IPMI_PASSWORD, 'raw', '0x30', '0x30', '0x02', hex(speed)]
         subprocess.run(cmd, check=True, timeout=10)
         logger.info(f"Fan speed set to {speed}%")
     except subprocess.CalledProcessError as e:
@@ -142,11 +144,12 @@ user_model = api.model('User', {
 @api.route('/login')
 class Login(Resource):
     @api.expect(user_model)
+    @limiter.limit("5 per minute")  # Add rate limiting to login endpoint
     def post(self):
         auth = request.json
         if not auth or not auth['username'] or not auth['password']:
             return {'message': 'Could not verify'}, 401
-        if auth['username'] in config['users'] and check_password_hash(config['users'][auth['username']], auth['password']):
+        if auth['username'] in USERS and check_password_hash(USERS[auth['username']], auth['password']):
             token = jwt.encode({'username': auth['username'], 'exp': datetime.utcnow() + timedelta(hours=24)}, app.config['SECRET_KEY'])
             return {'token': token}
         return {'message': 'Could not verify'}, 401

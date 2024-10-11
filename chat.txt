@@ -1,0 +1,39 @@
+reduce tokens on last request
+
+update the  docker.yaml file to use as a docker run command to paste into dockge for the associated app files. app.py, index.html, requirements.txt, compose.yaml
+
+error docker run --name tempmonitorfancontrol --privileged --network host \
+-v $(pwd)/app:/app -v /sys:/sys:ro -v $(pwd)/docker.run:/docker.run \
+-e PYTHONUNBUFFERED=1 -e DEFAULT_USERNAME=admin -e DEFAULT_PASSWORD=admin \
+-e IPMI_ADDRESS=localhost -e IPMI_USERNAME=ipmi_user -e IPMI_PASSWORD=ipmi_password \
+-e DEBIAN_FRONTEND=noninteractive -p 8443:8443 --gpus all \
+--restart unless-stopped --health-cmd="curl -k https://localhost:8443/health" \
+--health-interval=1m --health-timeout=10s --health-retries=3 --health-start-period=40s \
+ubuntu:22.04 /bin/bash /docker.run
+
+error: service "ubuntu" refers to undefined volume $(pwd)/app: invalid compose project
+
+same issue ;look at the docker run command in readme file
+
+shopuuld we select external networks in dockge setup?
+
+when dockeer run on dockge same error
+
+temp-monitor-fan-control  | WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+temp-monitor-fan-control  | python3: can't open file '/app/app.py': [Errno 2] No such file or directory
+temp-monitor-fan-control exited with code 0
+
+Stack name can only contain [a-z][0-9] _ - on
+
+does the docker run command require '''bash ?
+
+when docker run tempmonitorfancontrol  | python3: can't open file '/app/app.py': [Errno 2] No such file or directory
+tempmonitorfancontrol exited with code 0
+
+tempmonitorfancontrol  | python3: can't open file '/app/app.py': [Errno 2] No such file or directory
+tempmonitorfancontrol exited with code 0
+
+please confirm all code is to be installed from a git repository to a dockge system all paths and functions must use this environment tempmonitorfancontrol  | cp: cannot stat './app/*': No such file or directory
+tempmonitorfancontrol exited with code 0
+
+can you scrape all of my sidfe of all these chats and put into a new file called chat.text ?

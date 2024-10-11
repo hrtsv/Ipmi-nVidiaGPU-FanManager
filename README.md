@@ -1,54 +1,83 @@
-# Temperature Monitor and Fan Control
+# IPMI and NVIDIA GPU Temperature Monitor with Fan Control
 
-This application monitors system temperatures and controls fan speeds using IPMI and NVIDIA Management Library.
+This application monitors IPMI sensors and NVIDIA GPUs, manages dynamic fan control, and presents a secure, mobile-friendly web interface for temperature monitoring and fan control.
+
+## Features
+
+- Real-time monitoring of IPMI sensors and NVIDIA GPU temperatures
+- Dynamic fan control based on temperature thresholds
+- Secure web interface with JWT authentication and HTTPS
+- Historical temperature data and charts
+- Dockerized for easy deployment and configuration
 
 ## Prerequisites
 
 - Docker
-- NVIDIA GPU (optional for GPU temperature monitoring)
+- IPMI-enabled server with NVIDIA GPUs
 
-## Running the Application
+## Quick Start
 
-To run the application using Docker, use the following command:
+Use the following Docker run command to fetch the latest version of the application, build it, and start it:
 
-```bash
-docker run --name tempmonitorfancontrol --privileged --network host \
--v ${PWD}/app:/app \
--v /sys:/sys:ro \
--e PYTHONUNBUFFERED=1 \
--e DEFAULT_USERNAME=admin \
--e DEFAULT_PASSWORD=admin \
--e IPMI_ADDRESS=localhost \
--e IPMI_USERNAME=ipmi_user \
--e IPMI_PASSWORD=ipmi_password \
--e DEBIAN_FRONTEND=noninteractive \
---gpus all \
---restart unless-stopped \
-ubuntu:22.04 \
-bash -c 'apt-get update && \
-apt-get install -y python3 python3-pip python3-venv openssl ipmitool curl && \
-python3 -m venv /app/venv && \
-. /app/venv/bin/activate && \
-pip install flask flask-restx pyjwt nvidia-ml-py3 tenacity && \
-python3 /app/app.py'
-```
+docker run -d \
+  --name ipmi-gpu-monitor \
+  -p 8443:8443 \
+  -e SECRET_KEY=$(openssl rand -hex 32) \
+  -e DEFAULT_USERNAME=admin \
+  -e DEFAULT_PASSWORD=admin \
+  -e IPMI_ADDRESS=your_ipmi_address \
+  -e IPMI_USERNAME=your_ipmi_username \
+  -e IPMI_PASSWORD=your_ipmi_password \
+  --device /dev/nvidia0:/dev/nvidia0 \
+  --device /dev/nvidiactl:/dev/nvidiactl \
+  --device /dev/nvidia-modeset:/dev/nvidia-modeset \
+  --device /dev/nvidia-uvm:/dev/nvidia-uvm \
+  -v temperature_logs:/app/temperature_logs \
+  --restart unless-stopped \
+  $(docker build -q https://github.com/hrtsv/Ipmi-nVidiaGPU-FanManager.git)
 
-This command will start the application in a Docker container with the necessary configurations.
+Replace `your_ipmi_address`, `your_ipmi_username`, and `your_ipmi_password` with your actual IPMI configuration.
 
-Note: Make sure that the `app` directory containing `app.py` is in the current working directory when running this command.
+Access the web interface at `https://your_server_ip:8443`
 
-## Features
+Default login credentials:
+- Username: admin
+- Password: admin
 
-- Monitors CPU, RAM, GPU, and case temperatures.
-- Controls fan speeds based on temperature thresholds.
-- Provides a RESTful API for accessing temperature data and controlling the application.
+**Important:** Change the default password immediately after your first login.
 
-## API Endpoints
+## Configuration
 
-- `/login`: Authenticate and receive a JWT token.
-- `/temperatures`: Get current temperature readings and fan speed.
-- `/historical_data`: Retrieve historical temperature data.
+The application is pre-configured with the Docker run command. The only values you need to replace are:
+
+- `IPMI_ADDRESS`: The IP address or hostname of your IPMI-enabled server
+- `IPMI_USERNAME`: The username for IPMI access
+- `IPMI_PASSWORD`: The password for IPMI access
+
+All other configuration is handled automatically:
+- `SECRET_KEY`: Automatically generated for securing the application
+- `DEFAULT_USERNAME`: Set to "admin"
+- `DEFAULT_PASSWORD`: Set to "admin"
+
+## Security Considerations
+
+- The application generates a self-signed SSL certificate during the Docker build process. For production use, consider replacing it with a certificate from a trusted Certificate Authority.
+- Change the default password immediately after your first login.
+- Use strong, unique passwords for user accounts and IPMI access.
+- Limit access to the application to trusted networks only.
+
+## Troubleshooting
+
+- If you encounter issues with IPMI or GPU temperature readings, ensure that you have the necessary permissions and that the IPMI and NVIDIA drivers are properly installed on the host system.
+- Check the Docker logs for any error messages or warnings:
+  ```
+  docker logs ipmi-gpu-monitor
+  ```
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the MIT License - see the LICENSE file for details.
