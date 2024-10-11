@@ -1,0 +1,29 @@
+services:
+  temp-monitor:
+    image: python:3.9-slim
+    container_name: temp-monitor-fan-control
+    privileged: true
+    network_mode: host
+    volumes:
+      - ./app:/app
+      - /sys:/sys:ro
+      - /usr/bin/ipmitool:/usr/bin/ipmitool:ro
+    working_dir: /app
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DEFAULT_USERNAME=admin
+      - DEFAULT_PASSWORD=admin
+      - IPMI_ADDRESS=localhost
+      - IPMI_USERNAME=ipmi_user
+      - IPMI_PASSWORD=ipmi_password
+    command: >
+      bash -c "
+      apt-get update && 
+      apt-get install -y ipmitool nvidia-smi openssl &&
+      pip install flask flask-restx pyjwt nvidia-ml-py3 &&
+      if [ ! -f cert.pem ] || [ ! -f key.pem ]; then
+        openssl req -x509 -newkey rsa:4096 -nodes -out cert.pem -keyout key.pem -days 365 -subj '/CN=localhost'
+      fi &&
+      python app.py
+      "
+    restart: unless-stopped
