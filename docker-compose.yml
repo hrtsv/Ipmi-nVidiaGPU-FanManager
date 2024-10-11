@@ -1,19 +1,24 @@
 version: '3.8'
-
 services:
-  app:
-    build: .
+  ipmi-gpu-monitor:
+    build:
+      context: https://github.com/hrtsv/Ipmi-nVidiaGPU-FanManager.git#main
     ports:
       - "8443:8443"
-    volumes:
-      - temperature_logs:/app/temperature_logs
-    env_file:
-      - .env
+    environment:
+      - SECRET_KEY=mysecretkey
+      - DEFAULT_USERNAME=admin
+      - DEFAULT_PASSWORD=admin
+      - IPMI_ADDRESS=your_ipmi_address
+      - IPMI_USERNAME=your_ipmi_username
+      - IPMI_PASSWORD=your_ipmi_password
     devices:
       - /dev/nvidia0:/dev/nvidia0
       - /dev/nvidiactl:/dev/nvidiactl
       - /dev/nvidia-modeset:/dev/nvidia-modeset
       - /dev/nvidia-uvm:/dev/nvidia-uvm
+    volumes:
+      - temperature_logs:/app/temperature_logs
     restart: unless-stopped
 
 volumes:
