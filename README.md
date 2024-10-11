@@ -1,59 +1,41 @@
-# Temperature Monitor and Fan Control for IPMI and NVIDIA GPUs
+# Temperature Monitor and Fan Control
 
-This application monitors temperatures from IPMI sensors and NVIDIA GPUs, adjusts fan speeds based on temperature thresholds, and provides a web interface for viewing temperature data and historical logs.
+This application monitors system temperatures and controls fan speeds using IPMI and NVIDIA Management Library.
+
+## Prerequisites
+
+- Docker
+- NVIDIA GPU (optional for GPU temperature monitoring)
+
+## Running the Application
+
+To run the application using Dock, use the following command:
+
+```bash
+docker run --name temp-monitor-fan-control --privileged --network host \
+-v $(pwd)/app:/app -v /sys:/sys:ro -v $(pwd)/docker.run:/docker.run \
+-e PYTHONUNBUFFERED=1 -e DEFAULT_USERNAME=admin -e DEFAULT_PASSWORD=admin \
+-e IPMI_ADDRESS=localhost -e IPMI_USERNAME=ipmi_user -e IPMI_PASSWORD=ipmi_password \
+-e DEBIAN_FRONTEND=noninteractive -p 8443:8443 --gpus all \
+--restart unless-stopped --health-cmd="curl -k https://localhost:8443/health" \
+--health-interval=1m --health-timeout=10s --health-retries=3 --health-start-period=40s \
+ubuntu:22.04 /bin/bash /docker.run
+```
+
+This command will start the application in a Docker container with the necessary configurations.
 
 ## Features
 
-- Real-time temperature monitoring for CPU, RAM, Case, and up to two NVIDIA GPUs
-- Automatic fan speed adjustment based on configurable temperature thresholds
-- Historical temperature data logging and retrieval
-- Secure API with JWT authentication
-- Health check endpoint for monitoring application status
+- Monitors CPU, RAM, GPU, and case temperatures.
+- Controls fan speeds based on temperature thresholds.
+- Provides a RESTful API for accessing temperature data and controlling the application.
 
-## Deployment Instructions
+## API Endpoints
 
-1. In Dockge, create a new stack.
-2. When prompted for the stack's source, choose "Git Repository".
-3. Enter the URL of this GitHub repository.
-4. Review and adjust the `compose.yaml` file if needed (see Configuration section).
-5. Deploy the stack.
+- `/login`: Authenticate and receive a JWT token.
+- `/temperatures`: Get current temperature readings and fan speed.
+- `/historical_data`: Retrieve historical temperature data.
 
-After deployment, access the Temperature Monitor at `https://your-server-ip:8443`.
-Default login credentials are admin/admin. Change these immediately after first login.
+## License
 
-## Configuration
-
-Edit the `compose.yaml` file to adjust the following settings before deployment:
-
-- `DEFAULT_USERNAME` and `DEFAULT_PASSWORD`: Change these to secure your application
-- `IPMI_ADDRESS`, `IPMI_USERNAME`, and `IPMI_PASSWORD`: Set these to match your IPMI configuration
-- Adjust the `TEMP_THRESHOLDS` in `app/app.py` if you need different temperature ranges for fan control
-
-## Customization
-
-The application is designed to be easily customizable:
-
-- Modify `app/app.py` to add new features or adjust existing functionality
-- Edit `app/index.html` to customize the web interface
-
-After making changes, rebuild and redeploy the Docker container.
-
-## Health Check
-
-The application includes a health check endpoint at `/health`. This is used by Docker to monitor the application's status. You can also use this endpoint for external monitoring tools.
-
-## Security Note
-
-- Change the default credentials immediately after first login
-- Ensure proper network security measures are in place to protect access to the application
-- The application uses a self-signed SSL certificate by default. For production use, consider using a properly signed certificate
-
-## Troubleshooting
-
-- Check the Docker logs for any error messages
-- Use the `/health` endpoint to verify if all components of the application are functioning correctly
-- Ensure that the IPMI and NVIDIA GPU tools are properly installed and configured on the host system
-
-## Contributing
-
-Contributions to improve the application are welcome. Please submit pull requests or open issues on the GitHub repository.
+This project is licensed under the MIT License.
