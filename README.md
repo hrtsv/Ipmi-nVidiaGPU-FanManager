@@ -12,8 +12,8 @@ This application monitors system temperatures and controls fan speeds using IPMI
 To run the application using Docker, use the following command:
 
 ```bash
-docker run --name temp-monitor-fan-control --privileged --network host \
--v ./app:/app \
+docker run --name tempmonitorfancontrol --privileged --network host \
+-v ${PWD}/app:/app \
 -v /sys:/sys:ro \
 -e PYTHONUNBUFFERED=1 \
 -e DEFAULT_USERNAME=admin \
@@ -26,12 +26,16 @@ docker run --name temp-monitor-fan-control --privileged --network host \
 --restart unless-stopped \
 ubuntu:22.04 \
 bash -c 'apt-get update && \
-apt-get install -y python3 python3-pip openssl ipmitool curl && \
-pip3 install flask flask-restx pyjwt nvidia-ml-py3 tenacity && \
+apt-get install -y python3 python3-pip python3-venv openssl ipmitool curl && \
+python3 -m venv /app/venv && \
+. /app/venv/bin/activate && \
+pip install flask flask-restx pyjwt nvidia-ml-py3 tenacity && \
 python3 /app/app.py'
 ```
 
 This command will start the application in a Docker container with the necessary configurations.
+
+Note: Make sure that the `app` directory containing `app.py` is in the current working directory when running this command.
 
 ## Features
 
