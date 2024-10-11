@@ -9,7 +9,6 @@ services:
     volumes:
       - ./app:/app
       - /sys:/sys:ro
-      - ./docker.run:/docker.run
     working_dir: /app
     environment:
       - PYTHONUNBUFFERED=1
@@ -19,9 +18,20 @@ services:
       - IPMI_USERNAME=ipmi_user
       - IPMI_PASSWORD=ipmi_password
       - DEBIAN_FRONTEND=noninteractive
-    entrypoint: ["/bin/bash", "/docker.run"]
-    ports:
-      - "8443:8443"
+    command: >
+      bash -c '
+      apt-get update &&
+      apt-get install -y --no-install-recommends python3 python3-pip python3-venv openssl ipmitool curl &&
+      useradd -m appuser &&
+      chown -R appuser:appuser /app &&
+      su appuser -c "python3 -m venv /app/venv &&
+      . /app/venv/bin/activate &&
+      pip install flask flask-restx pyjwt nvidia-ml-py3 tenacity &&
+      if [ ! -f /app/cert.pem ] || [ ! -f /app/key.pem ]; then
+        openssl req -x509 -newkey rsa:4096 -nodes -out /app/cert.pem -keyout /app/key.pem -days 365 -subj \"/CN=localhost\";
+      fi &&
+      python3 /app/app.py"
+      '
     deploy:
       resources:
         reservations:
