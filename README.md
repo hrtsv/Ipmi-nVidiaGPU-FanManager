@@ -1,5 +1,5 @@
 # Ipmi-nVidiaGPU-Temp-Monitor-Fan-Control
- Uses IPMI and nViodia gpu to monitor temeratures and adjust fan speeds
+ Uses IPMI and nVidia gpu to monitor temeratures and adjust fan speeds
 # Temperature Monitor for Dockge
 
 This repository contains a Temperature Monitor application designed to be easily deployed using Dockge.
