@@ -12,7 +12,7 @@ This application monitors system temperatures and controls fan speeds using IPMI
 To run the application using Docker, use the following command:
 
 ```bash
-docker run --name temp_monitor_fan_control --privileged --network host \
+docker run --name tempmonitorfancontrol --privileged --network host \
 -v $(pwd)/app:/app -v /sys:/sys:ro -v $(pwd)/docker.run:/docker.run \
 -e PYTHONUNBUFFERED=1 -e DEFAULT_USERNAME=admin -e DEFAULT_PASSWORD=admin \
 -e IPMI_ADDRESS=localhost -e IPMI_USERNAME=ipmi_user -e IPMI_PASSWORD=ipmi_password \
