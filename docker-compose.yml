@@ -1,10 +1,13 @@
 version: '3.8'
+
 services:
   ipmi-gpu-monitor:
     build:
-      context: https://github.com/hrtsv/Ipmi-nVidiaGPU-FanManager.git#main
-    ports:
-      - "8443:8443"
+      context: https://github.com/hrtsv/Ipmi-nVidiaGPU-FanManager.git
+      dockerfile: Dockerfile
+    container_name: ipmi-gpu-monitor
+    privileged: true
+    network_mode: host
     environment:
       - SECRET_KEY=mysecretkey
       - DEFAULT_USERNAME=admin
@@ -12,14 +15,22 @@ services:
       - IPMI_ADDRESS=your_ipmi_address
       - IPMI_USERNAME=your_ipmi_username
       - IPMI_PASSWORD=your_ipmi_password
-    devices:
-      - /dev/nvidia0:/dev/nvidia0
-      - /dev/nvidiactl:/dev/nvidiactl
-      - /dev/nvidia-modeset:/dev/nvidia-modeset
-      - /dev/nvidia-uvm:/dev/nvidia-uvm
+      - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/bin/host
     volumes:
-      - temperature_logs:/app/temperature_logs
+      - /sys:/sys:ro
+      - /usr/bin:/usr/local/bin/host:ro
+      - temperature_logs:/temperature_logs
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     restart: unless-stopped
+    command: python /app/app.py
 
 volumes:
   temperature_logs:
